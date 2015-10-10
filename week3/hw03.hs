@@ -75,26 +75,61 @@ desugar (Assign a b)   = DAssign a b
 desugar (Incr a)       = DAssign a $ Op (Var a) Plus (Val 1)
 desugar (If a b c)     = DIf a (desugar b) (desugar c)
 desugar (While a b)    = DWhile a (desugar b)
-desugar (For a b c d)  = Assign a,   --DWhile b
+desugar (For a b c d)  = desugar $ Sequence a (While b $ Sequence d c)
 desugar (Sequence a b) = DSequence (desugar a) (desugar b)
 desugar (Skip)         = DSkip
 
---      Statement          Expression        Statement       Statement
--- initial assignment -> loop condition -> counter update -> loop task
+--For      Statement  Expression Statement Statement
 
 -- Exercise 4 -----------------------------------------
 
 evalSimple :: State -> DietStatement -> State
-evalSimple = undefined
+evalSimple state statement =
+  case statement of
+   DAssign a b   -> extend state a (evalE state b)
+   DIf a b c     -> if evalE state a /= 0 then
+                       evalSimple state b
+                    else
+                      evalSimple state c
+   DWhile a b    -> if evalE state a /= 0 then
+                      evalSimple (evalSimple state b) statement
+                    else
+                      state
+   DSequence a b -> evalSimple (evalSimple (state) a) b
+   DSkip         -> state
+
 
 run :: State -> Statement -> State
-run = undefined
+run state statement = evalSimple state (desugar statement)
 
 -- Programs -------------------------------------------
 
 slist :: [Statement] -> Statement
 slist [] = Skip
 slist l  = foldr1 Sequence l
+
+
+basicSkip :: Statement
+basicSkip = Skip
+
+basicAssign :: Statement
+basicAssign = Assign "A" (Val 1)
+
+basicSequence :: Statement
+basicSequence = Sequence (Assign "A" $ Val 1) (Assign "B" $ Val 2)
+
+basicIncr :: Statement
+basicIncr = Sequence (Assign "A" $ Val 1) (Incr "A")
+
+basicIf :: Statement
+basicIf = If (Op (Var "A") Eql (Val 4))
+             (Assign "B" $ Val 1)
+             (Assign "B" $ Val 2)
+
+basicWhile :: Statement
+basicWhile = While (Op (Var "A") Lt (Val 3))
+                   (Incr "A")
+
 
 {- Calculate the factorial of the input
 
